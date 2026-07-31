@@ -51,7 +51,7 @@ The workflow follows these steps:
 
 ## 📸 Workflow Overview
 
-![Workflow Overview](workflow-overview.png)
+![Workflow Overview](AI Customer Support Email Auto-Responder.jpg)
 
 
 ---
