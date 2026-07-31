@@ -51,7 +51,8 @@ The workflow follows these steps:
 
 ##📸 Project Screenshot
 
-(Add the screenshot after uploading it.)
+The screenshot below shows the complete workflow architecture.
+
 
 ---
 
