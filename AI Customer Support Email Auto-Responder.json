@@ -1,0 +1,697 @@
+{
+  "name": "AI Customer Support Email Auto-Responder",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 5,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1312,
+        -144
+      ],
+      "id": "fcb26f63-f57b-429f-9d66-aec639039757",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "nwBhmGgw7dm8f9uy",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6b33e821-e635-4022-9985-af43610b8bda",
+              "name": "sender_email",
+              "value": "={{ $json.From.match(/<(.+)>/)?.[1] ?? $json.From }}",
+              "type": "string"
+            },
+            {
+              "id": "d6f47137-002e-4b9f-b4ec-f69cc1eff107",
+              "name": "subject",
+              "value": "={{ $json.Subject }}",
+              "type": "string"
+            },
+            {
+              "id": "afb5f6b6-f3ab-4ac4-b585-9f4a5d4e366a",
+              "name": "email_body",
+              "value": "={{ $json.snippet }}",
+              "type": "string"
+            },
+            {
+              "id": "92ad6760-9d2e-4683-a469-b7dd6e06ccf2",
+              "name": "received_at",
+              "value": "={{ $today.format('dd-MM-yyyy') }}",
+              "type": "string"
+            },
+            {
+              "id": "576095de-d2c3-4eb7-8469-0e322f51f1e4",
+              "name": "email_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "809629d8-b036-4681-b2f1-36792ea4af17",
+              "name": "run_id",
+              "value": "={{ \"RUN-\" + $now.format(\"yyyyMMdd-HHmmss\") }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1120,
+        -144
+      ],
+      "id": "c5f1b51a-0373-498a-9e4d-951ff114da60",
+      "name": "Extract Email Data"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a customer support email classifier. Analyze the email and respond ONLY with valid JSON in this exact format:\n{\n  \"urgency\": \"Critical\" | \"Normal\" | \"Spam\",\n  \"category\": \"Technical\" | \"Billing\" | \"General\" | \"Complaint\" | \"Spam\",\n  \"tone\": \"Frustrated\" | \"Angry\" | \"Neutral\" | \"Curious\" | \"Positive\",\n  \"confidence\": 0.0-1.0,\n  \"reason\": \"one sentence explaining your classification\"\n}\n\nRules:\n- Critical = account locked, data loss, security issue, service down\n- Normal = general questions, feature requests, billing queries\n- Spam = promotions, unsolicited offers, irrelevant content\n- Return ONLY the JSON object. No extra text. No markdown code blocks."
+            },
+            {
+              "content": "=Classify this customer support email:\n\nFROM: {{ $json.sender_email }}\nSUBJECT: {{ $json.subject }}\nBODY: {{ $json.email_body }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 300,
+          "textFormat": {
+            "textOptions": {
+              "type": "text"
+            }
+          },
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -912,
+        -144
+      ],
+      "id": "958af0ea-5a01-45c5-8d7a-679c9dd71caf",
+      "name": "AI Email Classifier",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const prevData = item.json;\n\n  let aiRaw = \"\";\n\n  // YOUR specific OpenAI node structure: output[0].content[0].text\n  try {\n    if (prevData.output && prevData.output[0] && prevData.output[0].content) {\n      const contentArr = prevData.output[0].content;\n      const textBlock = contentArr.find(c => c.type === \"output_text\" || c.type === \"text\");\n      if (textBlock) aiRaw = textBlock.text || \"\";\n    }\n  } catch(e) {}\n\n  // Fallbacks\n  if (!aiRaw && prevData.message?.content) aiRaw = prevData.message.content;\n  if (!aiRaw && prevData.choices?.[0]) aiRaw = prevData.choices[0].message.content;\n  if (!aiRaw && prevData.content?.[0]?.text) aiRaw = prevData.content[0].text;\n\n  // Debug — remove after fixing\n  console.log(\"aiRaw found:\", aiRaw);\n\n  let parsed = {};\n  try {\n    const cleaned = aiRaw.replace(/```json/g,\"\").replace(/```/g,\"\").trim();\n    parsed = JSON.parse(cleaned);\n  } catch(e) {\n    parsed = {\n      urgency: \"Normal\",\n      category: \"General\", \n      tone: \"Neutral\",\n      confidence: 0,\n      reason: \"Parse failed: \" + aiRaw.substring(0, 100)\n    };\n  }\n\n  const extracted = $(\"Extract Email Data\").first().json;\n\n  results.push({\n    json: {\n      sender_email: extracted.sender_email,\n      subject:      extracted.subject,\n      email_body:   extracted.email_body,\n      received_at:  extracted.received_at,\n      email_id:     extracted.email_id,\n      run_id:       extracted.run_id,\n      urgency:      parsed.urgency    || \"Normal\",\n      category:     parsed.category   || \"General\",\n      tone:         parsed.tone       || \"Neutral\",\n      confidence:   parsed.confidence || 0,\n      ai_reason:    parsed.reason     || \"\",\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        -144
+      ],
+      "id": "f87a8dfc-7a28-47ca-b6e5-724ac2b671f2",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.urgency }}",
+                    "rightValue": "Critical",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "e9b44057-a0cc-4186-85f1-36616b151674"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Output 1 --- Critical Path"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d0028a5f-2601-4a42-b4b2-4bba8c6a11ed",
+                    "leftValue": "={{ $json.urgency }}",
+                    "rightValue": "Normal",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Output 2 --- Normal Path"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Output 3 --- Spam/Fallback Path"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -384,
+        -160
+      ],
+      "id": "73cc0285-deca-4ba6-a575-cddb153031cc",
+      "name": "Urgency Router"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a friendly, professional customer support agent. Write a helpful, empathetic reply to the customer email. Keep it concise (3-5 sentences). Match the tone appropriately — if they are frustrated, be extra empathetic. Sign off as \"Support Team\". Return only the email body text, no subject line."
+            },
+            {
+              "content": "=\tCustomer email:\nFROM: {{ $json.sender_email }}\nSUBJECT: {{ $json.subject }}\nBODY: {{ $json.email_body }}\nTONE DETECTED: {{ $json.tone }}\nCATEGORY: {{ $json.category }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -112,
+        -144
+      ],
+      "id": "4dc2d394-96b1-476f-9644-bcc0dab600eb",
+      "name": "AI Reply Generator",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Parse AI Response').item.json.email_id }}",
+        "labelIds": [
+          "SPAM"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        80
+      ],
+      "id": "5d4d3118-59fd-4872-b92f-d50318f49a4e",
+      "name": "Archieve & Label",
+      "webhookId": "816158cc-1a3e-4fa5-a6a1-9f7c36c23e73",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "nwBhmGgw7dm8f9uy",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "khondokartowfik97@gmail.com",
+        "subject": "=🚨 CRITICAL: {{ $('Parse AI Response').item.json.subject }}",
+        "emailType": "text",
+        "message": "=CRITICAL support email requires human attention.\n\nFrom: {{ $('Parse AI Response').item.json.sender_email }}\nSubject: {{ $('Parse AI Response').item.json.subject }}\nCategory: {{ $('Parse AI Response').item.json.category }}\nTone: {{ $('Parse AI Response').item.json.tone }}\nAI Reason: {{ $('Parse AI Response').item.json.ai_reason }}\nRun ID: {{ $('Parse AI Response').item.json.run_id }}\n\nPlease respond to this customer immediately.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        -368
+      ],
+      "id": "e67b6a8a-3491-4d52-baec-b124e9559ae8",
+      "name": "Alert Manager",
+      "webhookId": "0060375d-8af3-4af9-874f-829f7b7768ca",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "nwBhmGgw7dm8f9uy",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n\n  // Pull the AI-generated reply text\n  let replyText = \"\";\n  if (item.json.message && item.json.message.content) {\n    replyText = item.json.message.content;\n  } else if (item.json.choices && item.json.choices[0]) {\n    replyText = item.json.choices[0].message.content;\n  } else {\n    replyText = item.json.text || \"\";\n  }\n\n  // Pull original email fields from Node 4\n  const parsed  = $(\"Parse AI Response\").first().json;\n\n  // ── Quality rules ──────────────────────────────────\n  const tooShort    = replyText.trim().length < 50;\n  const tooLong     = replyText.trim().length > 2000;\n  const hasError    = replyText.toLowerCase().includes(\"i cannot\") ||\n                      replyText.toLowerCase().includes(\"i'm sorry, i can't\");\n  const isEmpty     = replyText.trim().length === 0;\n\n  let qualityPassed = true;\n  let qualityNote   = \"Passed\";\n  let finalReply    = replyText.trim();\n\n  if (isEmpty || hasError) {\n    qualityPassed = false;\n    qualityNote   = \"AI reply empty or refused — using fallback\";\n    finalReply    = `Hi there,\\n\\nThank you for reaching out to us. We have received your email regarding \"${parsed.subject}\" and a member of our support team will get back to you within 24 hours.\\n\\nBest regards,\\nSupport Team`;\n  } else if (tooShort) {\n    qualityNote  = \"Reply short but acceptable\";\n  } else if (tooLong) {\n    qualityNote  = \"Reply trimmed to 2000 chars\";\n    finalReply   = finalReply.substring(0, 2000) + \"\\n\\n— Support Team\";\n  }\n\n  const processingTime = new Date().toISOString();\n\n  results.push({\n    json: {\n      // Pass all original fields forward\n      sender_email:   parsed.sender_email,\n      subject:        parsed.subject,\n      email_body:     parsed.email_body,\n      received_at:    parsed.received_at,\n      email_id:       parsed.email_id,\n      run_id:         parsed.run_id,\n      urgency:        parsed.urgency,\n      category:       parsed.category,\n      tone:           parsed.tone,\n      confidence:     parsed.confidence,\n      ai_reason:      parsed.ai_reason,\n      // New fields added by this node\n      final_reply:    finalReply,\n      quality_passed: qualityPassed,\n      quality_note:   qualityNote,\n      processed_at:   processingTime,\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -144
+      ],
+      "id": "4b3fd96f-3345-4705-a692-bfc69ccc8ae5",
+      "name": "Quality Check"
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $json.email_id }}",
+        "emailType": "text",
+        "message": "={{ $json.final_reply }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        -144
+      ],
+      "id": "6ea93a3c-7fb4-41d0-9b61-62a8486a88a9",
+      "name": "Send Gmail Reply",
+      "webhookId": "1ee31aec-c5ef-422d-888c-934c150795eb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "nwBhmGgw7dm8f9uy",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1suy62lSM0P_G3lQfD7JTybbH0-PGbjbn8T-KruLc-EE",
+          "mode": "list",
+          "cachedResultName": "AI Support Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1suy62lSM0P_G3lQfD7JTybbH0-PGbjbn8T-KruLc-EE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1suy62lSM0P_G3lQfD7JTybbH0-PGbjbn8T-KruLc-EE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.toISO() }}",
+            "Sender Email": "={{ $('Parse AI Response').item.json.sender_email }}",
+            "Subject": "={{ $('Parse AI Response').item.json.subject }}",
+            "Urgency": "={{ $('Parse AI Response').item.json.urgency }}",
+            "Category": "={{ $('Parse AI Response').item.json.category }}",
+            "Tone": "={{ $('Parse AI Response').item.json.tone }}",
+            "AI Reply Sent": "={{ $json.quality_passed ?? \"N/A\" }}",
+            "Reply Preview": "={{ $json.final_reply ? $json.final_reply.substring(0,120) : \"N/A\" }}",
+            "Thread ID": "={{ $('Parse AI Response').item.json.email_id }}",
+            "Status": "={{ $json.quality_note ?? \"Processed\" }}",
+            "Processing Time": "={{ $now.toISO() }}",
+            "Error Notes": "={{ $json.quality_note ?? \"\" }}",
+            "Run ID": "={{ $('Parse AI Response').item.json.run_id }}"
+          },
+          "matchingColumns": [
+            "Thread ID"
+          ],
+          "schema": [
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sender Email",
+              "displayName": "Sender Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Subject",
+              "displayName": "Subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Urgency",
+              "displayName": "Urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tone",
+              "displayName": "Tone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Reply Sent",
+              "displayName": "AI Reply Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Reply Preview",
+              "displayName": "Reply Preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Processing Time",
+              "displayName": "Processing Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Error Notes",
+              "displayName": "Error Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Run ID",
+              "displayName": "Run ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        848,
+        -144
+      ],
+      "id": "dca12841-8f94-46ad-a2ee-6cb6b52510f5",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "VzbEalRWffqvH1Tm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6768f0ae-08d6-4c9b-a19a-23e81e83977e",
+              "name": "Status",
+              "value": "completed",
+              "type": "string"
+            },
+            {
+              "id": "52753e8e-30ae-4c9a-b9ed-4db0c9bada54",
+              "name": "Completed_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1056,
+        -144
+      ],
+      "id": "9c0544d8-9d8b-43d5-b5c8-e60ba78f8184",
+      "name": "Execution Complete"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email Data": {
+      "main": [
+        [
+          {
+            "node": "AI Email Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Email Classifier": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Urgency Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Urgency Router": {
+      "main": [
+        [
+          {
+            "node": "Alert Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Reply Generator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Archieve & Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Reply Generator": {
+      "main": [
+        [
+          {
+            "node": "Quality Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Check": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail Reply": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Manager": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archieve & Label": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Execution Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0bfc9775-4e4a-4517-aa19-1035206fbe51",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8e0140d0dd2a60275d63339f86e2c726a4fb4af8098a37ce7342006c383458ca"
+  },
+  "id": "WdLbSS2Id6SMLLCh",
+  "tags": []
+}
