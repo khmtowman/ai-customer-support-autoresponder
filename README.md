@@ -49,9 +49,9 @@ The workflow follows these steps:
 
 ---
 
-##📸 Project Screenshot
+## 📸 Workflow Overview
 
-The screenshot below shows the complete workflow architecture.
+![Workflow Overview](workflow-overview.png)
 
 
 ---
