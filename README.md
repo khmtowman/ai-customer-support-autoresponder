@@ -6,7 +6,7 @@ An AI-powered customer support email automation workflow built using n8n and Lar
 
 ---
 
-##✨ Features
+## ✨ Features
 
 - Automatically detects incoming Gmail messages
 - AI-powered email classification
@@ -20,7 +20,7 @@ An AI-powered customer support email automation workflow built using n8n and Lar
 
 ---
 
-##🛠 Technologies Used
+## 🛠 Technologies Used
 
 - n8n
 - Gmail API
@@ -31,7 +31,7 @@ An AI-powered customer support email automation workflow built using n8n and Lar
 
 ---
 
-##🔄 Workflow
+## 🔄 Workflow
 
 The workflow follows these steps:
 
@@ -51,12 +51,12 @@ The workflow follows these steps:
 
 ## 📸 Workflow Overview
 
-![Workflow Overview](AI Customer Support Email Auto-Responder.jpg)
+![Workflow Overview](AI Customer Support Email Auto-Responder.png)
 
 
 ---
 
-##📁 Repository Contents
+## 📁 Repository Contents
 
 - AI Customer Support Email Auto-Responder.json
 - screenshots/
@@ -64,7 +64,7 @@ The workflow follows these steps:
 
 ---
 
-##👨‍💻 Author
+## 👨‍💻 Author
 
 Md. Towfikur Rahman
 
