@@ -6,21 +6,21 @@ An AI-powered customer support email automation workflow built using n8n and Lar
 
 ---
 
-## Features
+##✨ Features
 
-- 📩 Automatically detects incoming Gmail messages
-- 🧠 AI-powered email classification
-- 🚦 Urgency-based routing
-- ✍️ AI-generated customer replies
-- ✅ Quality checking before sending
-- 📤 Automatic Gmail responses
-- 🏷️ Archive and label processed emails
-- 📊 Logs workflow activity to Google Sheets
-- 🚨 Sends alerts for important emails
+- Automatically detects incoming Gmail messages
+- AI-powered email classification
+- Urgency-based routing
+- AI-generated customer replies
+- Quality checking before sending
+- Automatic Gmail responses
+- Archive and label processed emails
+- Logs workflow activity to Google Sheets
+- Sends alerts for important emails
 
 ---
 
-## Technologies Used
+##🛠 Technologies Used
 
 - n8n
 - Gmail API
@@ -31,7 +31,7 @@ An AI-powered customer support email automation workflow built using n8n and Lar
 
 ---
 
-## Workflow
+##🔄 Workflow
 
 The workflow follows these steps:
 
@@ -49,28 +49,21 @@ The workflow follows these steps:
 
 ---
 
-## Project Screenshot
+##📸 Project Screenshot
 
 (Add the screenshot after uploading it.)
 
 ---
 
-## Demo Video
+##📁 Repository Contents
 
-Loom Demo:
-(Paste your Loom URL here)
-
----
-
-## Repository Contents
-
-- customer-support-workflow.json
+- AI Customer Support Email Auto-Responder.json
 - screenshots/
 - README.md
 
 ---
 
-## Author
+##👨‍💻 Author
 
 Md. Towfikur Rahman
 
